@@ -79,6 +79,44 @@ test('accepts a complete and consistent grader result', () => {
   assert.deepEqual(parseGrading(raw, ['first expectation', 'second expectation']), JSON.parse(raw));
 });
 
+for (const passed of [true, false]) {
+  for (const evidence of ['', ' \t\r\n', '\u00a0\u2003']) {
+    test(`rejects ${passed ? 'passing' : 'failing'} grading with blank evidence ${JSON.stringify(evidence)}`, () => {
+      const raw = JSON.stringify({
+        expectations: [{ id: 1, text: 'check the result', passed, evidence }],
+        summary: { passed: Number(passed), failed: Number(!passed), total: 1, pass_rate: Number(passed) },
+      });
+      assert.equal(parseGrading(raw, ['check the result']), null);
+    });
+  }
+}
+
+test('preserves nonblank evidence including surrounding whitespace', () => {
+  const evidence = '  No matching tool call was found.\n';
+  const raw = JSON.stringify({
+    expectations: [{ id: 1, text: 'check the result', passed: false, evidence }],
+    summary: { passed: 0, failed: 1, total: 1, pass_rate: 0 },
+  });
+  assert.equal(parseGrading(raw, ['check the result']).expectations[0].evidence, evidence);
+});
+
+test('blank evidence retains raw grading without publishing a scored artifact', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'grading-blank-evidence-'));
+  try {
+    const base = path.join(dir, 'my-skill.eval-1');
+    const raw = JSON.stringify({
+      expectations: [{ id: 1, text: 'check the result', passed: true, evidence: '' }],
+      summary: { passed: 1, failed: 0, total: 1, pass_rate: 1 },
+    });
+    clearGradingSlot(base);
+    assert.equal(persistGradingOutcome(base, parseGrading(raw, ['check the result']), raw), false);
+    assert.equal(fs.existsSync(`${base}.grading.json`), false);
+    assert.equal(fs.readFileSync(`${base}.grading.raw.txt`, 'utf8'), raw);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('rejects grader results that omit expectations', () => {
   const raw = JSON.stringify({
     expectations: [
