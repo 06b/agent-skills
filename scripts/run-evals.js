@@ -426,7 +426,7 @@ function materializeWorkspace(ev) {
   return workspace;
 }
 
-function parseGrading(raw, expectations) {
+function parseGrading(raw, expectations, onInvalid = () => {}) {
   // Grader output may arrive fenced; extract the JSON object and validate shape.
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return null;
@@ -449,7 +449,10 @@ function parseGrading(raw, expectations) {
     if (r === null || typeof r !== 'object') return null;
     if (typeof r.text !== 'string' || typeof r.passed !== 'boolean' || typeof r.evidence !== 'string') return null;
     // An unexplained verdict is not a scored result; retain it as raw grading.
-    if (!r.evidence.trim()) return null;
+    if (!r.evidence.trim()) {
+      onInvalid('grader returned blank evidence');
+      return null;
+    }
     if (!Number.isInteger(r.id) || r.id < 1 || r.id > n) return null;
     if (seenIds.has(r.id)) return null;
     seenIds.add(r.id);
@@ -589,14 +592,15 @@ function runBehavioral(skillName, dryRun) {
     // The trace can be megabytes; pass the grader prompt via stdin, never
     // argv, or it would blow past the OS argument-size limit (E2BIG).
     const raw = execFileSync('claude', ['-p'], { input: graderPrompt, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: GRADER_TIMEOUT_MS });
-    const grading = parseGrading(raw, ev.expectations);
+    let gradingError = 'grader returned invalid JSON';
+    const grading = parseGrading(raw, ev.expectations, (reason) => { gradingError = reason; });
     const runMeta = {
       executor_model: extractExecutorModel(trace),
       grader_model: 'unknown',
       timestamp: new Date().toISOString(),
     };
     if (!persistGradingOutcome(base, grading, raw, runMeta)) {
-      console.log(`  ✗  eval ${ev.id}: grader returned invalid JSON — raw saved to ${path.relative(ROOT, base)}.grading.raw.txt`);
+      console.log(`  ✗  eval ${ev.id}: ${gradingError} — raw saved to ${path.relative(ROOT, base)}.grading.raw.txt`);
       failures++;
       continue;
     }
