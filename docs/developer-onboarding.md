@@ -36,7 +36,7 @@ cd agent-skills
 
 There's no build step and no `package.json`; validators are plain Node scripts. You need:
 
-- **Node 20+** (what CI runs) for the `scripts/` validators
+- **Node 24** (the version CI pins) for the `scripts/` validators
 - **bash** (+ `jq` recommended) for the hook regression tests
 - **`gh` CLI** for the duplicate-PR check before proposing a skill
 - **Claude Code** only if you want to run Tier 3 behavioral evals locally
@@ -49,7 +49,7 @@ claude --plugin-dir /path/to/agent-skills
 
 ## 3. The verification loop
 
-The repo eats its own cooking: verification is non-negotiable for skills, and it's non-negotiable for contributions to the repo too. Everything CI runs, you can run locally in seconds. This is the full set, in the order the workflow runs it:
+The repo eats its own cooking: verification is non-negotiable for skills, and it's non-negotiable for contributions to the repo too. Everything CI runs without the Claude Code CLI, you can run locally in seconds. This is that set, grouped by what each check covers (the workflow spreads them across several jobs):
 
 ```bash
 # Tier 1, structural: frontmatter, naming, required sections, layout and line budget
@@ -78,13 +78,14 @@ node scripts/run-evals.js --min-rank1 95
 # Tier 3, behavioral (on demand, spends tokens; --dry-run prints the plan)
 node scripts/run-evals.js --behavioral <skill-name> --dry-run
 
-# Hook regression tests, required if you touch anything under hooks/
+# Hook regression tests, required if you touch anything under hooks/ or
+# skills/using-agent-skills/SKILL.md (the session-start script embeds that file)
 bash hooks/session-start-test.sh
 bash hooks/sdd-cache-test.sh
 bash hooks/simplify-ignore-test.sh
 ```
 
-CI runs this set on Ubuntu, then runs the validators and unit tests again on macOS and Windows, so path handling and line endings get exercised too. When the workflow gains a step, this block should gain the same line; if they ever disagree, [the workflow file](../.github/workflows/test-plugin-install.yml) is the source of truth.
+CI runs this set on Ubuntu, then runs the validators and unit tests again on macOS and Windows, so path handling and line endings get exercised too. Two further jobs need the Claude Code CLI and are not in the block: `claude plugin validate .` checks the marketplace and plugin manifests, and a marketplace install (`claude plugin marketplace add ./`, then `claude plugin install agent-skills@addy-agent-skills --scope user`) proves the plugin installs from a checkout. Run those if you touch `plugin.json`, the `.claude-plugin/` manifests, or anything the install path reads. When the workflow gains a step, this block should gain the same line; if they ever disagree, [the workflow file](../.github/workflows/test-plugin-install.yml) is the source of truth.
 
 The three eval tiers are worth understanding even if you never touch the harness, because a red Tier 2 usually means *fix your skill's description*, not the eval: Tier 2 is a lexical approximation of routing (stemmed TF-IDF over descriptions), and its two target failure modes are a description missing the vocabulary users actually say, and an over-broad description that outranks the right skill. The full design, schema, and trust-level rules are in [evals/README.md](../evals/README.md).
 
@@ -110,7 +111,7 @@ One point worth internalizing rather than looking up: when writing trigger promp
 
 - Docs and skills are **English only**; translations aren't accepted because they drift ([CONTRIBUTING.md](../CONTRIBUTING.md#translations) has the rationale).
 - Changes to `scripts/run-evals.js` or the eval schema should stay compatible with skill-creator's `evals.json` schema (adopted verbatim for the behavioral tier; that compatibility is a feature, not an accident).
-- Anything touching `hooks/` requires the three hook regression tests (§3). Anything touching `scripts/` requires its unit tests, and a new validator ships with a test file and a CI step.
+- Anything touching `hooks/` or `skills/using-agent-skills/SKILL.md` (which the session-start script embeds) requires the three hook regression tests (§3). Anything touching `scripts/` requires its unit tests.
 
 ## 5. Pre-PR checklist
 
@@ -118,7 +119,7 @@ One point worth internalizing rather than looking up: when writing trigger promp
 - [ ] Tier 2 green the way CI runs it: `node scripts/run-evals.js --min-rank1 95`
 - [ ] Command parity and artifact paths green if you touched any command directory: `node scripts/validate-commands.js` and `node scripts/validate-artifact-paths.js`
 - [ ] Unit tests green if you touched `scripts/`: `node --test scripts/*-test.js scripts/lib/*-test.js`
-- [ ] Hook tests green if you touched `hooks/`: all three `bash hooks/*-test.sh`
+- [ ] Hook tests green if you touched `hooks/` or `using-agent-skills`: `bash hooks/session-start-test.sh`, `bash hooks/sdd-cache-test.sh`, `bash hooks/simplify-ignore-test.sh`
 - [ ] New skill → eval case file present with the minimum trigger/behavioral counts
 - [ ] New skill → gap justified in the PR description; catalog and open PRs checked
 - [ ] No duplicated content; cross-references used instead
