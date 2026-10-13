@@ -15,6 +15,7 @@ Refines raw ideas into sharp, actionable concepts worth building through structu
 - Use when you need to stress-test assumptions before committing to a direction
 - Use when you want to expand options before converging on one
 - Trigger phrases: "Help me refine this idea", "Ideate on [concept]", "Stress-test my plan"
+- Not for: a user who is unsure what they want at all (use `interview-me`), or a direction already chosen that needs a spec (use `spec-driven-development`)
 
 ## How It Works
 
@@ -31,7 +32,6 @@ This skill is primarily an interactive dialogue. Invoke it with an idea, and the
 bash skills/idea-refine/scripts/idea-refine.sh
 ```
 
-**Trigger Phrases:**
 ## Output
 
 The final output is a markdown one-pager saved to `docs/ideas/[idea-name].md` (after user confirmation), containing:
